@@ -1,11 +1,13 @@
+import local_libraries.tones as tones
 import time
 import reedsolo
 import subprocess
 rsc = reedsolo.RSCodec(10)
+#file = True
 def recieve():
 	while True:
 		proc = subprocess.Popen(
-			['minimodem', '--rx', '300', '--confidence', '1.2', '-q'],
+			['minimodem', '--rx', '300', '--confidence', '0.1', '-q'],
 			stdout=subprocess.PIPE,
 			stderr=subprocess.DEVNULL
 		)
@@ -19,7 +21,15 @@ def recieve():
 
 def unframe(raw):
 	splitted = raw.split(b"{|{|{|")
+
 	print("Splitted: " + str(splitted))
+	for item in splitted:
+		if b"|}|}|}" in item or b"|||" in item:
+			print("Sending ackgnowledgement")
+			tones.play(1000, 500)
+		else:
+			print("Not a packet")
+#		sine(500, 700) #ackgnowledge ment tone
 #	intermediate = raw.replace(b"{|{|{|", b"")
 #	intermediate = intermediate.replace(b"|}|}|}", b"")
 #	
@@ -94,7 +104,7 @@ def format(message):
 def send(message):
 	print("Sending: " + str(message))
 	proc = subprocess.Popen(
-		['minimodem', '--tx', '300', '--confidence', '0.5'],
+		['minimodem', '--tx', '300', '--confidence', '0.3'],
 		stdin=subprocess.PIPE,
 		stderr=subprocess.DEVNULL
 	)
@@ -110,9 +120,19 @@ if role == "1":
 	msg = input("Message: ")
 	frames = format(msg)
 	#raw = b""
+#	send(b"\n") #start of new frame
 	for frame in frames:
-		send(bytes(frame))
+		send(b"\n" + bytes(frame) + b"\n")
 		time.sleep(0.5)
+		while True:
+			if tones.listen(1000):
+				print("Got ackgnowledgement, continuing to next packet")
+				break
+			print("Didn't recieve ackgnowledgement. Resending the frame")
+			time.sleep(1)
+			send(b"\n" + bytes(frame) + b"\n")
+#			time.sleep(0.5)
+#		time.sleep(0.5)
 	#	raw = raw + bytes(frame)
 	#unframe(raw)
 elif role == "2":
