@@ -38,8 +38,13 @@ def unframe(raw):
 		if b"|}|}|}" in item or b"|||" in item:
 			print("Sending ackgnowledgement")
 #			newframes.append(item)
-			tones.play(1000, 500)
-			return rsc.decode(b"{|{|{|" + item)[0]
+			try:
+				fixed = rsc.decode(b"{|{|{|" + item)[0]
+				tones.play(1000, 500)
+				print(fixed)
+				return fixed
+			except Exception as e:
+				print(e)
 #			return b"{|{|{|" + item
 		elif b"{OK}" in item:
 			breaknow = True
@@ -47,24 +52,41 @@ def unframe(raw):
 #			exit(1)
 			print("Exiting from recieve loop, recieving cconnection close")
 			content = ""
+			i = 0
 			for frame in newframes:
 				frame = frame.replace(b"{|{|{|", b"")
 				frame = frame.replace(b"|}|}|}", b"")
 				text = frame.split(b"|||")[1]
-				length = frame.split(b"|||")[0]
-				print("Frame length: " + str(length))
+				sequencenum = int(frame.split(b"|||")[0])
+				print("Frame sequence number: " + str(int(sequencenum)))
 				print("Frame content: " + str(text))
 #				text = str(text).replace("bytearray'", "")
 				text = text.decode("ascii", errors="ignore")
-				if int(length) <= 10:
+				print(f"Sequencenum: {sequencenum}, i: {i}")
+				if sequencenum == i:
 					content = content + str(text)
+#					i = i - 1
+					print(f"Sequencenum: {sequencenum}, i: {i}")
 				else:
-					while len(str(text)) >= 11:
-						text = str(text)[:-1] #claude says this deletes last char
-					content = content + str(text)
+					print("Recieved duplicate packet number with sequence id " + str(sequencenum))
+					i = i - 1
+#					while len(str(text)) >= 11:
+#						text = str(text)[:-1] #claude says this deletes last char
+#					content = content + str(text)
+				i = i + 1
+#				print(content)
 #					print("Length error")
 			print("Reassembled string: " + content)
 			print(newframes)
+#			break
+#		elif b"SYNCSYNCSYNC" in item:
+#			print("Got sync")
+#			tones.play(1000, duration_ms=500)
+#			tones.play(2300, duration_ms=75)
+#			tones.play(2600, duration_ms=75)
+#			if tones.listen(1000, duration_ms=500):
+#				print("Sync agreed, ready for data")
+
 #		else:
 #			print("Not a packet")
 #		sine(500, 700) #ackgnowledge ment tone
@@ -118,6 +140,7 @@ def format(message):
 	chunks = chonk(message)
 	print(chunks)
 	frames = []
+	i = 0
 	for chunk in chunks:
 		thebytes = chunk.encode("ascii")
 #		parity = rsc.encode(thebytes)
@@ -130,12 +153,15 @@ def format(message):
 #		frame = b"{|{|{|" + bytes(str(len(frame)), "ascii") + b"|" + thebytes + b"|||" + parity + b"|}|}|}"
 #		frames.append(frame)
 
-		template = b"{|{|{|" + b"??" + b"|||" + thebytes + b"|}|}|}"
-		if not(len(template) <= 99 and len(template) >=10):
-			print("Frame length error")
-			return
-		frame = b"{|{|{|" + bytes(str(len(template)), "ascii") + b"|||" + thebytes + b"|}|}|}"
+		if i <= 9:
+			padded = b"0" + bytes(str(i), "ascii")
+#		template = b"{|{|{|" + b"??" + b"|||" + thebytes + b"|}|}|}"
+#		if not(len(template) <= 99 and len(template) >=10):
+#			print("Frame length error")
+#			return
+		frame = b"{|{|{|" + padded + b"|||" + thebytes + b"|}|}|}"
 		frames.append(rsc.encode(frame))
+		i = i + 1
 	print(frames)
 	return frames
 
@@ -159,18 +185,30 @@ if role == "1":
 	frames = format(msg)
 	#raw = b""
 #	send(b"\n") #start of new frame
+#	while True:
+#		send(b"SYNCSYNCSYNCSYNC\n")
+#	time.sleep(0.5)
+#		if tones.listen(1000, duration_ms=500):
+#			if tones.listen(2300, duration_ms=75):
+#				if tones.listen(2600, duration_ms=75)
+#			print("Synced")
+#			tones.play(1000, duration_ms=500)
+#			break
+
 	for frame in frames:
 #		send(b"\n" + bytes(frame) + b"\n")
 #		time.sleep(0.5)
+#			send(b"\n" + bytes(frame) + b"\n")
 		while True:
-			if tones.listen(1000, duration_ms=2000):
+			send(b"\n" + bytes(frame) + b"\n")
+			if tones.listen(1000, duration_ms=500):
 				print("Got ackgnowledgement, continuing to next packet")
 				break
 			print("Didn't recieve ackgnowledgement. Resending the frame")
 #			time.sleep(1)
-			send(b"\n" + bytes(frame) + b"\n")
+#			send(b"\n" + bytes(frame) + b"\n")
 	while True:
-		if tones.listen(1000, duration_ms=2000):
+		if tones.listen(1000, duration_ms=500):
 			print("Done")
 			break
 		print("Never recieved ack")
