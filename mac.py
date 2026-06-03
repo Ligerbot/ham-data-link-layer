@@ -5,6 +5,7 @@ import subprocess
 rsc = reedsolo.RSCodec(10)
 #file = True
 def recieve():
+	global proc
 	global newframes
 	newframes = []
 	breaknow = False
@@ -13,36 +14,44 @@ def recieve():
 		stdout=subprocess.PIPE,
 		stderr=subprocess.DEVNULL
 	)
-	while True:
+	while not breaknow:
 		recieved = proc.stdout.readline()
 #		print(recieved)
-		frame = unframe(recieved)
-		if frame != None:
-			newframes.append(frame)
+		message = unframe(recieved)
+#		print(message)
+		if message != None and message != "":
+			return message
+#		if frame != None:
+#			newframes.append(frame)
 #		if breaknow == True:
 #			print("Newframes: " + str(newframes))
 #			break
-	print(newframes)
-	proc.terminate()
-	proc.terminate()
-	proc.terminate()
-	proc.terminate()
-
+#	print(newframes)
+###	proc.terminate()
+#	proc.terminate()
+#	proc.terminate()
+#	proc.terminate()
+#	return message
+#	return newframes
 def unframe(raw):
 	global breaknow
 	global newframes
 	splitted = raw.split(b"{|{|{|")
 #	print("Splitted: " + str(splitted))
 #	breaknow = False
+	breaknow = False
 	for item in splitted:
+		if breaknow:
+			break
 		if b"|}|}|}" in item or b"|||" in item:
-			print("Sending ackgnowledgement")
+#			print("Sending ackgnowledgement")
 #			newframes.append(item)
 			try:
 				fixed = rsc.decode(b"{|{|{|" + item)[0]
 				tones.play(1000, 500)
-				print(fixed)
-				return fixed
+				newframes.append(fixed) #does this fix it?
+#				print(fixed)
+#				return fixed
 			except Exception as e:
 				print(e)
 #			return b"{|{|{|" + item
@@ -50,34 +59,39 @@ def unframe(raw):
 			breaknow = True
 			tones.play(1000, 500)
 #			exit(1)
-			print("Exiting from recieve loop, recieving cconnection close")
+#			print("Exiting from recieve loop, recieving cconnection close")
+#			print("Connection closed from remote end")
 			content = ""
 			i = 0
 			for frame in newframes:
 				frame = frame.replace(b"{|{|{|", b"")
-				frame = frame.replace(b"|}|}|}", b"")
+				frame = frame.split(b"|}|}|}")[0] #this instead of the commented line below makes it so that there aren't extra parity bits messing stuff up
+#				frame = frame.replace(b"|}|}|}", b"")
 				text = frame.split(b"|||")[1]
 				sequencenum = int(frame.split(b"|||")[0])
-				print("Frame sequence number: " + str(int(sequencenum)))
-				print("Frame content: " + str(text))
+#				print("Frame sequence number: " + str(int(sequencenum)))
+#				print("Frame content: " + str(text))
 #				text = str(text).replace("bytearray'", "")
 				text = text.decode("ascii", errors="ignore")
-				print(f"Sequencenum: {sequencenum}, i: {i}")
+#				print(f"Sequencenum: {sequencenum}, i: {i}")
 				if sequencenum == i:
 					content = content + str(text)
 #					i = i - 1
-					print(f"Sequencenum: {sequencenum}, i: {i}")
+#					print(f"Sequencenum: {sequencenum}, i: {i}")
 				else:
-					print("Recieved duplicate packet number with sequence id " + str(sequencenum))
+#					print("Recieved duplicate packet number with sequence id " + str(sequencenum))
 					i = i - 1
 #					while len(str(text)) >= 11:
 #						text = str(text)[:-1] #claude says this deletes last char
 #					content = content + str(text)
 				i = i + 1
-#				print(content)
+			#	print(content)
 #					print("Length error")
-			print("Reassembled string: " + content)
-			print(newframes)
+#			print("Reassembled string: " + content)
+#			print(newframes)
+#			break
+#			print("Content: " + content)
+			return content
 #			break
 #		elif b"SYNCSYNCSYNC" in item:
 #			print("Got sync")
@@ -138,7 +152,7 @@ def chonk(message):
 		return chunks
 def format(message):
 	chunks = chonk(message)
-	print(chunks)
+#	print(chunks)
 	frames = []
 	i = 0
 	for chunk in chunks:
@@ -162,11 +176,12 @@ def format(message):
 		frame = b"{|{|{|" + padded + b"|||" + thebytes + b"|}|}|}"
 		frames.append(rsc.encode(frame))
 		i = i + 1
-	print(frames)
+#	print(frames)
 	return frames
 
 def send(message):
-	print("Sending: " + str(message))
+	global proc
+#	print("Sending: " + str(message))
 	proc = subprocess.Popen(
 		['minimodem', '--tx', '1200', '--confidence', '0.3'],
 		stdin=subprocess.PIPE,
@@ -179,10 +194,29 @@ def send(message):
 	proc.terminate()
 	proc.terminate()
 	proc.terminate()
-role = input("Sender(1) or reciever(2): ")
-if role == "1":
-	msg = input("Message: ")
+
+def send_data(msg):
 	frames = format(msg)
+	for frame in frames:
+		while True:
+			send(b"\n" + bytes(frame) + b"\n")
+			if tones.listen(1000, duration_ms=500):
+				print("Ackgnowledged")
+				break
+			print("Resending frame")
+	while True:
+		if tones.listen(1000, duration_ms=500):
+			print("Transmission done")
+			break
+		print("Retransmitting connection close signal")
+		send(b"\n{OK}\n")
+
+if __name__ == "__main__":
+	try:
+		role = input("Sender(1) or reciever(2): ")
+		if role == "1":
+			msg = input("Message: ")
+			frames = format(msg)
 	#raw = b""
 #	send(b"\n") #start of new frame
 #	while True:
@@ -195,29 +229,37 @@ if role == "1":
 #			tones.play(1000, duration_ms=500)
 #			break
 
-	for frame in frames:
+			for frame in frames:
 #		send(b"\n" + bytes(frame) + b"\n")
 #		time.sleep(0.5)
 #			send(b"\n" + bytes(frame) + b"\n")
-		while True:
-			send(b"\n" + bytes(frame) + b"\n")
-			if tones.listen(1000, duration_ms=500):
-				print("Got ackgnowledgement, continuing to next packet")
-				break
-			print("Didn't recieve ackgnowledgement. Resending the frame")
-#			time.sleep(1)
-#			send(b"\n" + bytes(frame) + b"\n")
-	while True:
-		if tones.listen(1000, duration_ms=500):
-			print("Done")
-			break
-		print("Never recieved ack")
-		send(b"\n{OK}\n{OK}\n")
+				while True:
+					send(b"\n" + bytes(frame) + b"\n")
+					if tones.listen(1000, duration_ms=500):
+						print("Got ackgnowledgement, continuing to next packet")
+						break
+					print("Didn't recieve ackgnowledgement. Resending the frame")
+	#			time.sleep(1)
+	#			send(b"\n" + bytes(frame) + b"\n")
+			while True:
+				if tones.listen(1000, duration_ms=500):
+					print("Done")
+					break
+				print("Never recieved ack")
+				send(b"\n{OK}\n{OK}\n")
 #			time.sleep(0.5)
 #		time.sleep(0.5)
 	#	raw = raw + bytes(frame)
 	#unframe(raw)
-elif role == "2":
-	recieve()
-else:
-	print("Invalid option")
+		elif role == "2":
+			print(recieve())
+		else:
+			print("Invalid option")
+	finally:
+		proc.terminate()
+		proc.terminate()
+		proc.terminate()
+		proc.terminate()
+		proc.terminate()
+		proc.terminate()
+		print("Killed off minimodem")
