@@ -10,7 +10,7 @@ def recieve():
 	newframes = []
 	breaknow = False
 	proc = subprocess.Popen(
-		['minimodem', '--rx', '300', '--confidence', '0.1', '-q'],
+		['minimodem', '--rx', '1200', '--confidence', '0.1', '-q'],
 		stdout=subprocess.PIPE,
 		stderr=subprocess.DEVNULL
 	)
@@ -183,7 +183,7 @@ def send(message):
 	global proc
 #	print("Sending: " + str(message))
 	proc = subprocess.Popen(
-		['minimodem', '--tx', '300', '--confidence', '0.3'],
+		['minimodem', '--tx', '1200', '--confidence', '0.3'],
 		stdin=subprocess.PIPE,
 		stderr=subprocess.DEVNULL
 	)
