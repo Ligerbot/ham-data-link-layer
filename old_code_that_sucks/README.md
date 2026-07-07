@@ -1,5 +1,7 @@
 # Ham Radio Data Link Layer
 
+don't use this code it sucks
+
 The goal of this project to to make my own data link layer protocol for ham radio. I've tried to use AX.25, but it is seemingly impossible to decode it using AFSK in python.
 
 Eventually, when this is finished, the program will be importable to other python programs to be used as a library. I want to move my other repo rtty-email to use this protocol.
